@@ -26,14 +26,6 @@
       "scope": "posts"
     }
   ],
-  "routes": [
-    {"path": "/", "title": "Polls"}
-  ],
-  "explore": {
-    "label": "Polls",
-    "icon": "fa-chart-bar",
-    "path": "/"
-  },
   "admin_panel": {
     "label": "Polls",
     "icon": "fa-chart-bar"

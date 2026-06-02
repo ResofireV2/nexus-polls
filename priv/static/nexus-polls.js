@@ -952,18 +952,6 @@
   }
 
   // ---------------------------------------------------------------------------
-  // PollsIndexPage — the explore route
-  // ---------------------------------------------------------------------------
-  function PollsIndexPage() {
-    return ce("div", { style: { padding: "32px 0" } },
-      ce("h2", { style: { fontSize: 20, fontWeight: 500, color: "var(--t1)", marginBottom: 8 } }, "Polls"),
-      ce("p", { style: { fontSize: 14, color: "var(--t3)" } },
-        "Polls are attached to individual posts. Browse the forum to find and participate in active polls."
-      )
-    );
-  }
-
-  // ---------------------------------------------------------------------------
   // AdminPanel — settings panel using SimpleSettingsPanel with no fields
   // (permissions are configured on the Permissions page; no settings_schema)
   // ---------------------------------------------------------------------------
@@ -1165,19 +1153,6 @@
           window.NexusComponents && window.NexusComponents.toast("Could not load poll data.", "err");
         });
     }
-  });
-
-  // ---------------------------------------------------------------------------
-  // Register: explore item + route
-  // ---------------------------------------------------------------------------
-  NE.registerRoute(SLUG, "/", PollsIndexPage, { title: "Polls" });
-
-  NE.registerExploreItem({
-    slug:     SLUG,
-    path:     "/",
-    label:    "Polls",
-    icon:     "fa-chart-bar",
-    priority: 50
   });
 
   // ---------------------------------------------------------------------------
