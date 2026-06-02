@@ -31,6 +31,19 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Pending poll state (compose flow)
+  //
+  // Tracks the poll attachment currently queued in the composer.
+  // Set by ComposeAttachmentsPreview when a polls_poll attachment is present;
+  // cleared when the user removes it via the × button.
+  //
+  // The toolbar onClick reads _pendingPoll.data to pre-fill the modal when
+  // the user re-opens it. onAttach calls _pendingPoll.remove() before calling
+  // attach() so a second attach replaces the first rather than stacking.
+  // ---------------------------------------------------------------------------
+  var _pendingPoll = null; // { data, remove }
+
+  // ---------------------------------------------------------------------------
   // Auth helper — reads JWT from localStorage, same pattern as other extensions
   // ---------------------------------------------------------------------------
   function authHeaders() {
@@ -277,6 +290,19 @@
     var _err= useState(null);       var error    = _err[0];var setError    = _err[1];
     var _sv = useState(false);      var showBallot= _sv[0];var setShowBallot= _sv[1];
     var _ex = useState(null);       var expanded  = _ex[0];var setExpanded  = _ex[1];
+    // Incremented by the nexus-polls:updated CustomEvent to trigger a re-fetch
+    var _ft = useState(0);          var fetchTick = _ft[0]; var setFetchTick = _ft[1];
+
+    // Listen for edit-save events from the post action modal
+    useEffect(function () {
+      function onUpdated(e) {
+        if (e.detail && e.detail.post_id === post_id) {
+          setFetchTick(function (n) { return n + 1; });
+        }
+      }
+      document.addEventListener("nexus-polls:updated", onUpdated);
+      return function () { document.removeEventListener("nexus-polls:updated", onUpdated); };
+    }, [post_id]);
 
     useEffect(function () {
       if (!post_id) return;
@@ -314,7 +340,7 @@
           setState("ballot");
         })
         .catch(function () { setState("no_poll"); });
-    }, [post_id]);
+    }, [post_id, fetchTick]);
 
     if (state === "loading") {
       return ce("div", {
@@ -499,11 +525,29 @@
     var setAttachments = props.setAttachments || function () {};
 
     var pollAttachment = attachments.find(function (a) { return a.kind === "polls_poll"; });
+
+    // Keep _pendingPoll in sync with the live attachments array.
+    // When a poll is present, register it with a remove function so the
+    // toolbar onClick can replace it cleanly. When absent, clear the ref.
+    if (pollAttachment) {
+      _pendingPoll = {
+        data: pollAttachment.data || {},
+        remove: function () {
+          setAttachments(function (prev) {
+            return prev.filter(function (a) { return a.kind !== "polls_poll"; });
+          });
+        }
+      };
+    } else {
+      _pendingPoll = null;
+    }
+
     if (!pollAttachment) return null;
 
     var data = pollAttachment.data || {};
 
     function removePoll() {
+      _pendingPoll = null;
       setAttachments(function (prev) {
         return prev.filter(function (a) { return a.kind !== "polls_poll"; });
       });
@@ -977,24 +1021,18 @@
       var attach      = ctx.attach;
       var currentUser = ctx.currentUser;
 
-      // Check can_create_poll — toolbar button only fires for posts scope,
-      // but we gate on the permission as a quick early exit.
-      // (Server enforces this in persist_attachment too.)
       if (!currentUser) return;
 
-      // Find any existing poll attachment in the composer attachments.
-      // We can't read the attachments array directly from onClick, but the
-      // compose_attachments slot component holds it. Instead, we read the
-      // DOM for the existing attachment via the data we stored when attaching.
-      // Simpler: just open a fresh modal. If a poll is already attached,
-      // the user can remove it via the compose_attachments preview first.
+      // If a poll is already attached, pre-fill the modal with its data.
+      // _pendingPoll is kept in sync by ComposeAttachmentsPreview.
+      var existingData = _pendingPoll ? _pendingPoll.data : {};
+
       var container = document.createElement("div");
       document.body.appendChild(container);
 
       function unmount() {
-        if (window.ReactDOM && window.ReactDOM.createRoot) {
-          // React 18
-          window._nexusPollsModalRoot && window._nexusPollsModalRoot.unmount();
+        if (window._nexusPollsModalRoot) {
+          window._nexusPollsModalRoot.unmount();
           window._nexusPollsModalRoot = null;
         } else if (window.ReactDOM) {
           window.ReactDOM.unmountComponentAtNode(container);
@@ -1003,15 +1041,16 @@
       }
 
       var modal = ce(PollModal, {
-        mode:       "create",
-        initialData: {},
-        onClose:    unmount,
-        onAttach:   function (data) {
-          // Replace any existing polls_poll attachment
-          // We call attach() which appends — the compose_attachments preview
-          // shows only one poll and its × removes it. Multiple calls to
-          // attach with the same kind stack, so we note: each toolbar click
-          // opens a fresh modal assuming prior removal via the preview.
+        mode:        "create",
+        initialData: existingData,
+        onClose:     unmount,
+        onAttach:    function (data) {
+          // Remove any existing poll attachment before adding the new one,
+          // so re-opening the modal and saving replaces rather than stacks.
+          if (_pendingPoll) {
+            _pendingPoll.remove();
+            _pendingPoll = null;
+          }
           attach({ kind: "polls_poll", data: data });
         }
       });
@@ -1079,7 +1118,9 @@
             allow_multiple:   data.poll.allow_multiple,
             show_before_vote: data.poll.show_before_vote,
             public_votes:     data.poll.public_votes,
-            duration_days:    data.poll.closes_at ? null : "never"
+            // When no closes_at, use "never". When there is a closes_at,
+            // default the picker to 7 — the admin can adjust as needed.
+            duration_days:    data.poll.closes_at ? 7 : "never"
           };
 
           var container = document.createElement("div");
@@ -1104,13 +1145,17 @@
             onSaved:     function (updated) {
               // Update module-level cache
               if (updated.poll) {
+                var existing = getCacheEntry(post.id);
                 setCacheEntry(post.id, {
                   vote_count:  updated.poll.total_votes,
-                  permissions: getCacheEntry(post.id) && getCacheEntry(post.id).permissions
+                  permissions: existing ? existing.permissions : null
                 });
               }
-              // The post footer will re-fetch on next visit; we can't force
-              // a re-render here since the footer is a separate component instance.
+              // Dispatch a CustomEvent so the mounted PollFooter component
+              // re-fetches and shows the updated poll immediately.
+              document.dispatchEvent(new CustomEvent("nexus-polls:updated", {
+                detail: { post_id: post.id }
+              }));
               window.NexusComponents && window.NexusComponents.toast("Poll updated.");
             }
           });
