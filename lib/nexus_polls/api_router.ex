@@ -56,40 +56,33 @@ defmodule NexusPolls.ApiRouter do
         send_json(conn, 403, %{error: "You don't have permission to vote"})
 
       :ok ->
-        {:ok, body, conn} = read_body(conn)
+        params     = conn.body_params
+        option_ids = params["option_ids"] || []
+        post_id    = parse_id(post_id)
 
-        case Jason.decode(body) do
-          {:error, _} ->
-            send_json(conn, 400, %{error: "Invalid JSON"})
+        cond do
+          is_nil(post_id) ->
+            send_json(conn, 400, %{error: "Invalid post id"})
 
-          {:ok, params} ->
-            option_ids = params["option_ids"] || []
-            post_id    = parse_id(post_id)
+          not is_list(option_ids) or option_ids == [] ->
+            send_json(conn, 400, %{error: "option_ids must be a non-empty array"})
 
-            cond do
-              is_nil(post_id) ->
-                send_json(conn, 400, %{error: "Invalid post id"})
+          not Enum.all?(option_ids, &is_integer/1) ->
+            send_json(conn, 400, %{error: "option_ids must be integers"})
 
-              not is_list(option_ids) or option_ids == [] ->
-                send_json(conn, 400, %{error: "option_ids must be a non-empty array"})
+          true ->
+            user_id = user && user.id
 
-              not Enum.all?(option_ids, &is_integer/1) ->
-                send_json(conn, 400, %{error: "option_ids must be integers"})
-
-              true ->
-                user_id = user && user.id
-
-                case Polls.cast_vote(post_id, option_ids, user_id) do
-                  {:ok, result}          -> send_json(conn, 200, result)
-                  {:error, :not_found}   -> send_json(conn, 404, %{error: "Poll not found"})
-                  {:error, :poll_closed} -> send_json(conn, 422, %{error: "This poll is closed"})
-                  {:error, :invalid_options} ->
-                    send_json(conn, 422, %{error: "One or more options do not belong to this poll"})
-                  {:error, :multiple_votes_not_allowed} ->
-                    send_json(conn, 422, %{error: "This poll only allows one vote"})
-                  {:error, _} ->
-                    send_json(conn, 500, %{error: "Could not record vote"})
-                end
+            case Polls.cast_vote(post_id, option_ids, user_id) do
+              {:ok, result}          -> send_json(conn, 200, result)
+              {:error, :not_found}   -> send_json(conn, 404, %{error: "Poll not found"})
+              {:error, :poll_closed} -> send_json(conn, 422, %{error: "This poll is closed"})
+              {:error, :invalid_options} ->
+                send_json(conn, 422, %{error: "One or more options do not belong to this poll"})
+              {:error, :multiple_votes_not_allowed} ->
+                send_json(conn, 422, %{error: "This poll only allows one vote"})
+              {:error, _} ->
+                send_json(conn, 500, %{error: "Could not record vote"})
             end
         end
     end
@@ -123,18 +116,11 @@ defmodule NexusPolls.ApiRouter do
             if not can_edit do
               send_json(conn, 403, %{error: "You don't have permission to edit this poll"})
             else
-              {:ok, body, conn} = read_body(conn)
-
-              case Jason.decode(body) do
-                {:error, _} ->
-                  send_json(conn, 400, %{error: "Invalid JSON"})
-
-                {:ok, attrs} ->
-                  case Polls.update_poll(id, attrs) do
-                    {:ok, result}        -> send_json(conn, 200, result)
-                    {:error, :not_found} -> send_json(conn, 404, %{error: "Poll not found"})
-                    {:error, _}          -> send_json(conn, 500, %{error: "Could not update poll"})
-                  end
+              attrs = conn.body_params
+              case Polls.update_poll(id, attrs) do
+                {:ok, result}        -> send_json(conn, 200, result)
+                {:error, :not_found} -> send_json(conn, 404, %{error: "Poll not found"})
+                {:error, _}          -> send_json(conn, 500, %{error: "Could not update poll"})
               end
             end
         end
