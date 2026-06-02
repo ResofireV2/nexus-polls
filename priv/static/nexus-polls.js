@@ -587,7 +587,8 @@
   // ---------------------------------------------------------------------------
   // PollModal — creates a poll or edits an existing one
   //
-  // Mounted via a React portal to document.body.
+  // Mounted by the caller into a fresh ReactDOM.createRoot on a div appended
+  // to document.body. Returns the overlay div directly — no portal needed.
   // Two modes:
   //   "create"  — called from toolbar onClick with { attach, currentUser }
   //   "edit"    — called from registerPostAction onClick with { post_id }
@@ -764,9 +765,9 @@
       ? (submitting ? "Saving…" : "Save changes")
       : (submitting ? "Attaching…" : "Attach poll");
 
-    // Modal overlay
-    return window.ReactDOM.createPortal(
-      ce("div", {
+    // Modal overlay — rendered into a fresh document.body root by the caller,
+    // so no portal needed. Return the overlay div directly.
+    return ce("div", {
         style: {
           position: "fixed", inset: 0, zIndex: 9999,
           background: "rgba(0,0,0,0.6)",
@@ -950,8 +951,7 @@
             }, btnLabel)
           )
         )
-      ),
-      document.body
+      )
     );
   }
 
