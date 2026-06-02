@@ -35,7 +35,7 @@ defmodule NexusPolls do
 
   @impl true
   def routes do
-    [{"/api", NexusPolls.ApiRouter, []}]
+    [{"/", NexusPolls.ApiRouter, []}]
   end
 
   # ---------------------------------------------------------------------------
