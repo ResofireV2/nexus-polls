@@ -6,7 +6,9 @@
   "version": "1.0.0",
   "module": "NexusPolls",
   "description": "Attach polls to posts. Members vote, results display inline below the post.",
-  "author": "billyrayfoss",
+  "author": "ResofireV2",
+  "logo_url": "/ext/nexus-polls/assets/logo.webp",
+  "banner_url": "/ext/nexus-polls/assets/banner.webp",
   "js_bundle": "nexus-polls.js",
   "hooks": [
     {"event": "post_deleted", "priority": 50}
