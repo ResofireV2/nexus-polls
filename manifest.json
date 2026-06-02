@@ -1,0 +1,63 @@
+{
+  "$schema": "https://YOUR-NEXUS-HOST/manifest_schema.json",
+  "manifest_version": 2,
+  "name": "Polls",
+  "slug": "nexus-polls",
+  "version": "1.0.0",
+  "module": "NexusPolls",
+  "description": "Attach polls to posts. Members vote, results display inline below the post.",
+  "author": "billyrayfoss",
+  "js_bundle": "nexus-polls.js",
+  "hooks": [
+    {"event": "post_deleted", "priority": 50}
+  ],
+  "side_data": [
+    {"entity": "post", "kind": "polls_poll"}
+  ],
+  "slots": [
+    "post_footer",
+    "compose_attachments"
+  ],
+  "toolbar_buttons": [
+    {
+      "id": "add-poll",
+      "icon": "fa-solid fa-chart-bar",
+      "tip": "Attach a poll",
+      "scope": "posts"
+    }
+  ],
+  "routes": [
+    {"path": "/", "title": "Polls"}
+  ],
+  "explore": {
+    "label": "Polls",
+    "icon": "fa-chart-bar",
+    "path": "/"
+  },
+  "admin_panel": {
+    "label": "Polls",
+    "icon": "fa-chart-bar"
+  },
+  "permissions": [
+    {
+      "key": "can_create_poll",
+      "label": "Can create a poll",
+      "default": "member"
+    },
+    {
+      "key": "can_vote",
+      "label": "Can vote on a poll",
+      "default": "member"
+    },
+    {
+      "key": "can_view_results",
+      "label": "Can view poll results",
+      "default": "everyone"
+    },
+    {
+      "key": "can_view_voters",
+      "label": "Can view who voted for each option",
+      "default": "member"
+    }
+  ]
+}
