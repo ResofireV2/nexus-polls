@@ -288,7 +288,6 @@
     var _se = useState([]);         var selected = _se[0]; var setSelected = _se[1];
     var _sb = useState(false);      var submitting= _sb[0];var setSubmitting= _sb[1];
     var _err= useState(null);       var error    = _err[0];var setError    = _err[1];
-    var _sv = useState(false);      var showBallot= _sv[0];var setShowBallot= _sv[1];
     var _ex = useState(null);       var expanded  = _ex[0];var setExpanded  = _ex[1];
     // Incremented by the nexus-polls:updated CustomEvent to trigger a re-fetch
     var _ft = useState(0);          var fetchTick = _ft[0]; var setFetchTick = _ft[1];
@@ -331,12 +330,8 @@
 
           if (p.closed) { setState("closed"); return; }
           if (uv.length > 0) { setState("results"); return; }
-          if (!pm.can_vote) {
-            // logged-out or no permission
-            if (p.show_before_vote) { setState("results"); return; }
-            setState("ballot"); return;
-          }
-          if (p.show_before_vote) { setState("results"); setShowBallot(false); return; }
+          // Always show the ballot first when the user hasn't voted yet.
+          // A "View results" link in the ballot lets them peek at current counts.
           setState("ballot");
         })
         .catch(function () { setState("no_poll"); });
@@ -397,7 +392,7 @@
       }
     },
 
-      // Header row: question + optional "Vote" toggle for show_before_vote
+      // Header row: question
       ce("div", {
         style: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }
       },
@@ -407,11 +402,12 @@
           ce("i", { className: "fa-solid fa-chart-bar", style: { fontSize: 14, color: "var(--ac)" } }),
           poll.question
         ),
-        (state === "results" && userVotes.length === 0 && !poll.closed && perms && perms.can_vote) &&
+        // "View results" link in ballot state — lets user peek before voting
+        (state === "ballot" && perms && perms.can_view_results && poll.total_votes > 0) &&
           ce("span", {
             style: { fontSize: 12, color: "var(--ac)", cursor: "pointer", flexShrink: 0, marginLeft: 8 },
-            onClick: function () { setShowBallot(true); setState("ballot"); }
-          }, "Vote")
+            onClick: function () { setState("results"); }
+          }, "View results")
       ),
 
       // ── Ballot state ──────────────────────────────────────────────────────
@@ -492,6 +488,7 @@
               ce("span", null, metaLine(poll)),
               state === "closed" && ce("span", null, " · "),
               state === "closed" && ce(ClosedBadge),
+              // User has voted — offer change vote
               state === "results" && userVotes.length > 0 && !poll.closed &&
                 ce("span", null,
                   ce("span", { style: { color: "var(--b2)" } }, " · "),
@@ -499,10 +496,18 @@
                     style: { color: "var(--ac)", cursor: "pointer" },
                     onClick: function () {
                       setSelected(userVotes.slice());
-                      setShowBallot(false);
                       setState("ballot");
                     }
                   }, "Change vote")
+                ),
+              // User hasn't voted yet — offer to go back to ballot
+              state === "results" && userVotes.length === 0 && !poll.closed && perms && perms.can_vote &&
+                ce("span", null,
+                  ce("span", { style: { color: "var(--b2)" } }, " · "),
+                  ce("span", {
+                    style: { color: "var(--ac)", cursor: "pointer" },
+                    onClick: function () { setState("ballot"); }
+                  }, "Vote")
                 )
             )
           )
@@ -610,9 +615,6 @@
     var _am = useState(initialData.allow_multiple   || false);
     var allowMultiple   = _am[0]; var setAllowMultiple   = _am[1];
 
-    var _sb = useState(initialData.show_before_vote || false);
-    var showBefore      = _sb[0]; var setShowBefore      = _sb[1];
-
     var _pv = useState(initialData.public_votes     || false);
     var publicVotes     = _pv[0]; var setPublicVotes     = _pv[1];
 
@@ -694,7 +696,6 @@
         question:         question.trim(),
         options:          validOpts.map(function (o) { return o.text.trim(); }),
         allow_multiple:   allowMultiple,
-        show_before_vote: showBefore,
         public_votes:     publicVotes,
         duration_days:    duration
       };
@@ -709,7 +710,6 @@
         var editData = {
           question:         data.question,
           allow_multiple:   data.allow_multiple,
-          show_before_vote: data.show_before_vote,
           public_votes:     data.public_votes,
           duration_days:    data.duration_days,
           options: opts.map(function (o, idx) {
@@ -880,9 +880,6 @@
           // Toggles
           Toggle && ce("div", { style: { marginBottom: 12 } },
             ce(Toggle, { value: allowMultiple, onChange: setAllowMultiple, label: "Allow multiple votes" })
-          ),
-          Toggle && ce("div", { style: { marginBottom: 12 } },
-            ce(Toggle, { value: showBefore,    onChange: setShowBefore,    label: "Show results before voting" })
           ),
           Toggle && ce("div", { style: { marginBottom: 16 } },
             ce(Toggle, { value: publicVotes,   onChange: setPublicVotes,   label: "Show who voted" })
@@ -1115,10 +1112,7 @@
             question:         data.poll.question,
             options:          data.options,
             allow_multiple:   data.poll.allow_multiple,
-            show_before_vote: data.poll.show_before_vote,
             public_votes:     data.poll.public_votes,
-            // When no closes_at, use "never". When there is a closes_at,
-            // default the picker to 7 — the admin can adjust as needed.
             duration_days:    data.poll.closes_at ? 7 : "never"
           };
 
