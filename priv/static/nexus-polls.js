@@ -764,8 +764,8 @@
       ? (submitting ? "Saving…" : "Save changes")
       : (submitting ? "Attaching…" : "Attach poll");
 
-    // Modal overlay — normal-flow faux-viewport so no position:fixed
-    return R.createPortal(
+    // Modal overlay
+    return window.ReactDOM.createPortal(
       ce("div", {
         style: {
           position: "fixed", inset: 0, zIndex: 9999,
